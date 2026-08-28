@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Daily Wonder — Market News</title>
+  <style>
+    :root { font-family: Arial, sans-serif; color: #111; background: #f6f7f8; }
+    * { box-sizing: border-box; } body { margin: 0; }
+    header { background: white; border-bottom: 1px solid #e5e7eb; padding: 20px 5vw; position: sticky; top: 0; z-index: 2; }
+    h1 { margin: 0; font-size: 26px; } .sub { color:#666; margin-top:5px; }
+    main { max-width: 1200px; margin: auto; padding: 28px 5vw 60px; }
+    .toolbar { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:22px; }
+    select, button, input { border:1px solid #d1d5db; border-radius:8px; padding:10px 12px; font:inherit; background:white; }
+    button { cursor:pointer; font-weight:600; } button.primary { background:#111; color:#fff; border-color:#111; }
+    .status { color:#666; margin:12px 0 20px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:16px; }
+    .card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; padding:16px; }
+    .card img { width:calc(100% + 32px); height:170px; object-fit:cover; margin:-16px -16px 14px; background:#eee; }
+    .meta { color:#777; font-size:13px; display:flex; justify-content:space-between; gap:8px; }
+    .card h2 { font-size:18px; line-height:1.3; margin:10px 0; }
+    .card p { color:#444; line-height:1.5; }
+    a { color:#111; font-weight:600; } .pick { display:flex; gap:8px; align-items:center; margin-top:14px; }
+    .newsletter { margin-top:38px; background:white; border:1px solid #e5e7eb; border-radius:12px; padding:20px; }
+    .newsletter textarea { width:100%; min-height:350px; margin-top:14px; padding:16px; font-family:monospace; line-height:1.5; }
+    .empty { padding:30px; background:white; border-radius:12px; color:#666; }
+  </style>
+</head>
+<body>
+<header><h1>Daily Wonder</h1><div class="sub">Curated market news → select stories → generate newsletter</div></header>
+<main>
+  <div class="toolbar">
+    <select id="source"><option value="">All configured sources</option></select>
+    <select id="category"><option value="">All categories</option><option>Markets</option><option>Companies</option><option>Rates & Bonds</option><option>Macro</option><option>Commodities</option><option>FX</option></select>
+    <button id="refresh">Refresh</button>
+    <button class="primary" id="generate">Generate newsletter (<span id="selectedCount">0</span>)</button>
+  </div>
+  <div class="status" id="status">Loading curated market news…</div>
+  <section class="grid" id="news"></section>
+  <section class="newsletter" id="newsletter" hidden>
+    <h2>Newsletter draft</h2>
+    <input id="newsletterTitle" value="Daily Wonder" />
+    <textarea id="draft"></textarea>
+  </section>
+</main>
+<script>
+const state={stories:[],selected:new Map()};
+const $=id=>document.getElementById(id);
+function fmt(date){return date?new Date(date).toLocaleString():''}
+function esc(s=''){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+async function loadSources(){try{const r=await fetch('/api/news/sources');const j=await r.json();for(const s of j.approvedSources||[]){const o=document.createElement('option');o.value=s;o.textContent=s;$('source').appendChild(o)}}catch(e){console.warn(e)}}
+async function loadNews(){const source=$('source').value,category=$('category').value;const q=new URLSearchParams();if(source)q.set('source',source);if(category)q.set('category',category);$('status').textContent='Loading curated market news…';$('news').innerHTML='';try{const r=await fetch('/api/news?'+q);if(!r.ok)throw new Error('News request failed');const j=await r.json();state.stories=j.data||[];$('status').textContent=state.stories.length?`${state.stories.length} stories from ${j.configuredSources.join(', ')||'configured sources'}`:'No stories available yet. Configure approved source feeds in environment variables.';render()}catch(e){$('status').textContent='Could not load news: '+e.message}}
+function render(){const root=$('news');if(!state.stories.length){root.innerHTML='<div class="empty">No curated stories yet.</div>';return}root.innerHTML=state.stories.map(s=>`<article class="card">${s.imageUrl?`<img src="${esc(s.imageUrl)}" alt="">`:''}<div class="meta"><span>${esc(s.source)}</span><span>${fmt(s.publishedAt)}</span></div><h2>${esc(s.headline)}</h2><p>${esc(s.snapshot)}</p><a href="${esc(s.sourceUrl)}" target="_blank" rel="noopener">Read original →</a><label class="pick"><input type="checkbox" data-id="${esc(s.id)}" ${state.selected.has(s.id)?'checked':''}> Select for newsletter</label></article>`).join('');root.querySelectorAll('input[type=checkbox]').forEach(x=>x.onchange=()=>{const s=state.stories.find(a=>a.id===x.dataset.id);x.checked?state.selected.set(s.id,s):state.selected.delete(x.dataset.id);$('selectedCount').textContent=state.selected.size})}
+async function generate(){const stories=[...state.selected.values()];if(!stories.length){$('status').textContent='Select at least one story first.';return}const r=await fetch('/api/newsletter/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stories,title:$('newsletterTitle').value||'Daily Wonder'})});const j=await r.json();if(!r.ok){$('status').textContent=j.detail||'Newsletter generation failed';return}$('draft').value=j.markdown;$('newsletter').hidden=false;$('newsletter').scrollIntoView({behavior:'smooth'})}
+$('refresh').onclick=loadNews;$('source').onchange=loadNews;$('category').onchange=loadNews;$('generate').onclick=generate;$('newsletterTitle').onchange=()=>{};loadSources().then(loadNews);
+</script>
+</body>
+</html>
