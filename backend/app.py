@@ -13,8 +13,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "data"))
 
 from market_config import INDICES, COMMODITIES, CURRENCIES, get_all_assets
 from market_fetcher import get_market_data
-from news_service import get_curated_news
-from newsletter_service import generate_newsletter
+from backend.news_service import get_curated_news
+from backend.newsletter_service import generate_newsletter
 
 app = FastAPI(title="Weekly Wonders Market API")
 
